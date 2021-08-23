@@ -25,8 +25,8 @@
  			}
  		},
  		{
- 			"from": [ 0, 5, 0.05 ],
- 			"to": [ 1.414, 6, 16.45 ],
+ 			"from": [ 0, 5, 1.95 ],
+ 			"to": [ 1.414, 6, 15.05 ],
  			"rotation": { "origin": [ 0, 6, 8 ], "axis": "z", "angle": 45 },
  			"faces": {
  				"up": { "uv": [ 0, 9, 16, 9.1 ], "texture": "#particle", "rotation": 270 },

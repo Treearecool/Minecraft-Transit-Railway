@@ -1,5 +1,5 @@
 {
-	"textures": {
+ 	"textures": {
 		"side": "mtr:block/psd_side_light",
 		"black": "mtr:block/black",
 		"particle": "mtr:block/apg_door_bottom"

@@ -20,12 +20,14 @@ import net.minecraft.world.World;
 public class BlockTicketBarrier extends HorizontalFacingBlock {
 
 	private final boolean isEntrance;
+	private final int style;
 
 	public static final EnumProperty<TicketSystem.EnumTicketBarrierOpen> OPEN = EnumProperty.of("open", TicketSystem.EnumTicketBarrierOpen.class);
 
-	public BlockTicketBarrier(boolean isEntrance) {
+	public BlockTicketBarrier(boolean isEntrance, int style) {
 		super(FabricBlockSettings.of(Material.METAL, MapColor.IRON_GRAY).requiresTool().hardness(2).luminance(5).nonOpaque());
 		this.isEntrance = isEntrance;
+		this.style = style;
 	}
 
 	@Override

@@ -228,6 +228,8 @@ public class MTR implements ModInitializer, IPacket {
 		registerBlock("station_pole", Blocks.STATION_POLE, ItemGroups.RAILWAY_FACILITIES);
 		registerBlock("ticket_barrier_entrance_1", Blocks.TICKET_BARRIER_ENTRANCE_1, ItemGroups.RAILWAY_FACILITIES);
 		registerBlock("ticket_barrier_exit_1", Blocks.TICKET_BARRIER_EXIT_1, ItemGroups.RAILWAY_FACILITIES);
+		registerBlock("ticket_barrier_entrance_2", Blocks.TICKET_BARRIER_ENTRANCE_2, ItemGroups.RAILWAY_FACILITIES);
+		registerBlock("ticket_barrier_exit_2", Blocks.TICKET_BARRIER_EXIT_2, ItemGroups.RAILWAY_FACILITIES);
 		registerBlock("ticket_machine", Blocks.TICKET_MACHINE, ItemGroups.RAILWAY_FACILITIES);
 		registerBlock("ticket_processor", Blocks.TICKET_PROCESSOR, ItemGroups.RAILWAY_FACILITIES);
 		registerBlock("ticket_processor_entrance", Blocks.TICKET_PROCESSOR_ENTRANCE, ItemGroups.RAILWAY_FACILITIES);

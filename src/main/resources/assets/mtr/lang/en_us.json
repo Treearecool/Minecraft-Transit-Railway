@@ -50,6 +50,8 @@
 	"block.mtr.station_pole": "Station Pole",
 	"block.mtr.ticket_barrier_entrance_1": "Ticket Barrier (Entrance)",
 	"block.mtr.ticket_barrier_exit_1": "Ticket Barrier (Exit)",
+	"block.mtr.ticket_barrier_entrance_2": "Ticket Barrier (Entrance)",
+	"block.mtr.ticket_barrier_exit_2": "Ticket Barrier (Exit)",
 	"block.mtr.ticket_machine": "Ticket Machine",
 	"block.mtr.ticket_processor": "Ticket Processor",
 	"block.mtr.ticket_processor_enquiry": "Enquiry Processor",

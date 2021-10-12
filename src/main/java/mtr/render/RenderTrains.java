@@ -1,23 +1,24 @@
 package mtr.render;
 
 import com.mojang.text2speech.Narrator;
+import mtr.MTRClient;
 import mtr.config.Config;
-import mtr.config.CustomResources;
-import mtr.data.*;
+import mtr.data.IGui;
+import mtr.data.RailType;
+import mtr.data.RailwayData;
+import mtr.data.Station;
+import mtr.gui.ClientCache;
 import mtr.gui.ClientData;
 import mtr.gui.IDrawing;
 import mtr.item.ItemRailModifier;
-import mtr.model.*;
+import mtr.model.TrainClientRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.render.*;
 import net.minecraft.client.render.entity.model.EntityModel;
 import net.minecraft.client.render.entity.model.MinecartEntityModel;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.vehicle.MinecartEntity;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.Text;
@@ -31,7 +32,6 @@ import net.minecraft.world.LightType;
 import net.minecraft.world.World;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -39,7 +39,12 @@ import java.util.stream.Collectors;
 public class RenderTrains implements IGui {
 
 	public static int maxTrainRenderDistance;
+	private static float gameTick = 0;
+	private static float lastPlayedTrainSoundsTick = 0;
+	private static int prevPlatformCount;
+	private static int prevSidingCount;
 
+	public static final int TICKS_PER_SPEED_SOUND = 4;
 	private static final int DETAIL_RADIUS = 32;
 	private static final int DETAIL_RADIUS_SQUARED = DETAIL_RADIUS * DETAIL_RADIUS;
 	private static final int MAX_RADIUS_REPLAY_MOD = 64 * 16;
@@ -77,73 +82,77 @@ public class RenderTrains implements IGui {
 		}
 
 		final int renderDistanceChunks = client.options.viewDistance;
-		final boolean isReplayMod = isReplayMod(player);
-		final float lastFrameDuration = isReplayMod ? 20F / 60 : client.getLastFrameDuration();
+		final float lastFrameDuration = MTRClient.isReplayMod ? 20F / 60 : client.getLastFrameDuration();
+		gameTick += lastFrameDuration;
 
 		final boolean useTTSAnnouncements = Config.useTTSAnnouncements();
 		if (Config.useDynamicFPS()) {
-			if (lastFrameDuration > 0.8) {
+			if (lastFrameDuration > 0.5) {
 				maxTrainRenderDistance = Math.max(maxTrainRenderDistance - (maxTrainRenderDistance - DETAIL_RADIUS) / 2, DETAIL_RADIUS);
-			} else if (lastFrameDuration < 0.5) {
+			} else if (lastFrameDuration < 0.4) {
 				maxTrainRenderDistance = Math.min(maxTrainRenderDistance + 1, renderDistanceChunks * 8);
 			}
 		} else {
 			maxTrainRenderDistance = renderDistanceChunks * 8;
 		}
 
+		final Vec3d cameraPos = camera.getPos();
+		final float cameraYaw = camera.getYaw();
 		final Vec3d cameraOffset = client.gameRenderer.getCamera().isThirdPerson() ? player.getCameraPosVec(client.getTickDelta()).subtract(cameraPos) : Vec3d.ZERO;
 
-		ClientData.updateReferences();
-		ClientData.schedulesForPlatform.clear();
-		ClientData.sidings.forEach(siding -> siding.simulateTrain(client.player, client.isPaused() ? 0 : lastFrameDuration, null, (x, y, z, yaw, pitch, customId, trainType, isEnd1Head, isEnd2Head, head1IsFront, doorLeftValue, doorRightValue, opening, lightsOn, offsetRender) -> renderWithLight(world, x, y, z, cameraPos.add(cameraOffset), player, offsetRender, (light, posAverage) -> {
-			final ModelTrainBase model = getModel(trainType);
+		ClientData.TRAINS.forEach(train -> train.render(world, client.isPaused() ? 0 : lastFrameDuration, (x, y, z, yaw, pitch, trainId, isEnd1Head, isEnd2Head, head1IsFront, doorLeftValue, doorRightValue, opening, lightsOn, playerOffset) -> renderWithLight(world, x, y, z, cameraPos.add(cameraOffset), playerOffset != null, (light, posAverage) -> {
+			final TrainClientRegistry.TrainProperties trainProperties = TrainClientRegistry.getTrainProperties(trainId);
 
 			matrices.push();
-			if (offsetRender) {
-				matrices.translate(x + cameraOffset.x, y + cameraOffset.y, z + cameraOffset.z);
-			} else {
+			if (playerOffset == null) {
 				matrices.translate(x - cameraPos.x, y - cameraPos.y, z - cameraPos.z);
+			} else {
+				matrices.translate(cameraOffset.x, cameraOffset.y, cameraOffset.z);
+				matrices.multiply(Vec3f.POSITIVE_Y.getDegreesQuaternion(player.yaw - cameraYaw));
+				matrices.translate(x - playerOffset.x, y - playerOffset.y, z - playerOffset.z);
 			}
 			matrices.multiply(Vec3f.POSITIVE_Y.getRadialQuaternion((float) Math.PI + yaw));
 			matrices.multiply(Vec3f.POSITIVE_X.getRadialQuaternion((float) Math.PI + pitch));
 
-			if (model == null) {
+			if (trainProperties.model == null) {
 				matrices.translate(0, 0.5, 0);
 				matrices.multiply(Vec3f.POSITIVE_Y.getDegreesQuaternion(90));
 				final VertexConsumer vertexConsumer = vertexConsumers.getBuffer(MODEL_MINECART.getLayer(new Identifier("textures/entity/minecart.png")));
 				MODEL_MINECART.setAngles(null, 0, 0, -0.1F, 0, 0);
 				MODEL_MINECART.render(matrices, vertexConsumer, light, OverlayTexture.DEFAULT_UV, 1, 1, 1, 1);
 			} else {
-				model.render(matrices, vertexConsumers, getTrainTexture(customId, trainType.id), light, doorLeftValue, doorRightValue, opening, isEnd1Head, isEnd2Head, head1IsFront, lightsOn, isReplayMod || posAverage.getSquaredDistance(player.getBlockPos()) <= DETAIL_RADIUS_SQUARED);
+				trainProperties.model.render(matrices, vertexConsumers, new Identifier("mtr:textures/entity/" + trainProperties.textureId + ".png"), light, doorLeftValue, doorRightValue, opening, isEnd1Head, isEnd2Head, head1IsFront, lightsOn, MTRClient.isReplayMod || posAverage.getSquaredDistance(new BlockPos(cameraPos)) <= DETAIL_RADIUS_SQUARED);
 			}
 
 			matrices.pop();
-		}), (prevPos1, prevPos2, prevPos3, prevPos4, thisPos1, thisPos2, thisPos3, thisPos4, x, y, z, trainType, lightsOn, offsetRender) -> renderWithLight(world, x, y, z, cameraPos.add(cameraOffset), player, offsetRender, (light, posAverage) -> {
+		}), (prevPos1, prevPos2, prevPos3, prevPos4, thisPos1, thisPos2, thisPos3, thisPos4, x, y, z, yaw, trainId, lightsOn, playerOffset) -> renderWithLight(world, x, y, z, cameraPos.add(cameraOffset), playerOffset != null, (light, posAverage) -> {
+			final TrainClientRegistry.TrainProperties trainProperties = TrainClientRegistry.getTrainProperties(trainId);
+
 			matrices.push();
-			if (offsetRender) {
-				matrices.translate(cameraOffset.x, cameraOffset.y, cameraOffset.z);
-			} else {
+			if (playerOffset == null) {
 				matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
+			} else {
+				matrices.translate(cameraOffset.x, cameraOffset.y, cameraOffset.z);
+				matrices.multiply(Vec3f.POSITIVE_Y.getDegreesQuaternion(player.yaw - cameraYaw));
+				matrices.translate(-playerOffset.x, -playerOffset.y, -playerOffset.z);
 			}
 
-			final VertexConsumer vertexConsumerExterior = vertexConsumers.getBuffer(MoreRenderLayers.getExterior(new Identifier(getConnectorTextureString(trainType.id, "exterior"))));
+			final VertexConsumer vertexConsumerExterior = vertexConsumers.getBuffer(MoreRenderLayers.getExterior(new Identifier(getConnectorTextureString(trainProperties.textureId, "exterior"))));
 			drawTexture(matrices, vertexConsumerExterior, thisPos2, prevPos3, prevPos4, thisPos1, light);
 			drawTexture(matrices, vertexConsumerExterior, prevPos2, thisPos3, thisPos4, prevPos1, light);
 			drawTexture(matrices, vertexConsumerExterior, prevPos3, thisPos2, thisPos3, prevPos2, light);
 			drawTexture(matrices, vertexConsumerExterior, prevPos1, thisPos4, thisPos1, prevPos4, light);
 
 			final int lightOnLevel = lightsOn ? MAX_LIGHT_INTERIOR : light;
-			final VertexConsumer vertexConsumerSide = vertexConsumers.getBuffer(MoreRenderLayers.getInterior(new Identifier(getConnectorTextureString(trainType.id, "side"))));
+			final VertexConsumer vertexConsumerSide = vertexConsumers.getBuffer(MoreRenderLayers.getInterior(new Identifier(getConnectorTextureString(trainProperties.textureId, "side"))));
 			drawTexture(matrices, vertexConsumerSide, thisPos3, prevPos2, prevPos1, thisPos4, lightOnLevel);
 			drawTexture(matrices, vertexConsumerSide, prevPos3, thisPos2, thisPos1, prevPos4, lightOnLevel);
-			final Identifier roofTextureId = new Identifier(getConnectorTextureString(trainType.id, "roof"));
-			final Identifier floorTextureId = new Identifier(getConnectorTextureString(trainType.id, "floor"));
-			drawTexture(matrices, vertexConsumers.getBuffer(lightsOn ? MoreRenderLayers.getInterior(roofTextureId) : MoreRenderLayers.getExterior(roofTextureId)), prevPos2, thisPos3, thisPos2, prevPos3, lightOnLevel);
-			drawTexture(matrices, vertexConsumers.getBuffer(lightsOn ? MoreRenderLayers.getInterior(floorTextureId) : MoreRenderLayers.getExterior(floorTextureId)), prevPos4, thisPos1, thisPos4, prevPos1, lightOnLevel);
+			drawTexture(matrices, vertexConsumers.getBuffer(MoreRenderLayers.getInterior(new Identifier(getConnectorTextureString(trainProperties.textureId, "roof")))), prevPos2, thisPos3, thisPos2, prevPos3, lightOnLevel);
+			drawTexture(matrices, vertexConsumers.getBuffer(MoreRenderLayers.getInterior(new Identifier(getConnectorTextureString(trainProperties.textureId, "floor")))), prevPos4, thisPos1, thisPos4, prevPos1, lightOnLevel);
 
 			matrices.pop();
 		}), (speed, stopIndex, routeIds) -> {
-			if (!(speed <= 5 && useRoutesAndStationsFromIndex(stopIndex, routeIds, (thisRoute, nextRoute, thisStation, nextStation, lastStation) -> {
+			if (!(speed <= 5 && RailwayData.useRoutesAndStationsFromIndex(stopIndex, routeIds, ClientData.DATA_CACHE, (thisRoute, nextRoute, thisStation, nextStation, lastStation) -> {
 				final Text text;
 				switch ((int) ((System.currentTimeMillis() / 1000) % 3)) {
 					default:
@@ -168,7 +177,7 @@ public class RenderTrains implements IGui {
 			final boolean showAnnouncementMessages = Config.showAnnouncementMessages();
 
 			if (showAnnouncementMessages || useTTSAnnouncements) {
-				useRoutesAndStationsFromIndex(stopIndex, routeIds, (thisRoute, nextRoute, thisStation, nextStation, lastStation) -> {
+				RailwayData.useRoutesAndStationsFromIndex(stopIndex, routeIds, ClientData.DATA_CACHE, (thisRoute, nextRoute, thisStation, nextStation, lastStation) -> {
 					final List<String> messages = new ArrayList<>();
 					final String thisRouteSplit = thisRoute.name.split("\\|\\|")[0];
 					final String nextRouteSplit = nextRoute == null ? null : nextRoute.name.split("\\|\\|")[0];
@@ -177,7 +186,7 @@ public class RenderTrains implements IGui {
 						final boolean isLightRailRoute = thisRoute.isLightRailRoute;
 						messages.add(IGui.insertTranslation(isLightRailRoute ? "gui.mtr.next_station_light_rail_announcement_cjk" : "gui.mtr.next_station_announcement_cjk", isLightRailRoute ? "gui.mtr.next_station_light_rail_announcement" : "gui.mtr.next_station_announcement", 1, nextStation.name));
 
-						final Map<Integer, ClientData.ColorNamePair> routesInStation = ClientData.routesInStation.get(nextStation.id);
+						final Map<Integer, ClientCache.ColorNamePair> routesInStation = ClientData.DATA_CACHE.stationIdToRoutes.get(nextStation.id);
 						if (routesInStation != null) {
 							final List<String> interchangeRoutes = routesInStation.values().stream().filter(interchangeRoute -> {
 								final String routeName = interchangeRoute.name.split("\\|\\|")[0];
@@ -190,7 +199,7 @@ public class RenderTrains implements IGui {
 						}
 
 						if (lastStation != null && nextStation.id == lastStation.id && nextRoute != null && !nextRoute.platformIds.isEmpty() && !nextRouteSplit.equals(thisRouteSplit)) {
-							final Station nextFinalStation = ClientData.platformIdToStation.get(nextRoute.platformIds.get(nextRoute.platformIds.size() - 1));
+							final Station nextFinalStation = ClientData.DATA_CACHE.platformIdToStation.get(nextRoute.platformIds.get(nextRoute.platformIds.size() - 1));
 							if (nextFinalStation != null) {
 								if (nextRoute.isLightRailRoute) {
 									messages.add(IGui.insertTranslation("gui.mtr.next_route_light_rail_announcement_cjk", "gui.mtr.next_route_light_rail_announcement", nextRoute.lightRailRouteNumber, 1, nextFinalStation.name.split("\\|\\|")[0]));
@@ -204,7 +213,7 @@ public class RenderTrains implements IGui {
 					final String message = IGui.formatStationName(IGui.mergeStations(messages, " ")).replace("  ", " ");
 					if (!message.isEmpty()) {
 						if (useTTSAnnouncements) {
-							Narrator.getNarrator().say(message, false);
+							Narrator.getNarrator().say(message, true);
 						}
 						if (showAnnouncementMessages) {
 							player.sendMessage(Text.of(message), false);
@@ -214,45 +223,24 @@ public class RenderTrains implements IGui {
 			}
 		}, (stopIndex, routeIds) -> {
 			if (useTTSAnnouncements) {
-				useRoutesAndStationsFromIndex(stopIndex, routeIds, (thisRoute, nextRoute, thisStation, nextStation, lastStation) -> {
+				RailwayData.useRoutesAndStationsFromIndex(stopIndex, routeIds, ClientData.DATA_CACHE, (thisRoute, nextRoute, thisStation, nextStation, lastStation) -> {
 					if (thisRoute.isLightRailRoute && lastStation != null) {
-						Narrator.getNarrator().say(IGui.insertTranslation("gui.mtr.light_rail_route_announcement_cjk", "gui.mtr.light_rail_route_announcement", thisRoute.lightRailRouteNumber.replace("", " "), 1, lastStation.name), false);
+						Narrator.getNarrator().say(IGui.insertTranslation("gui.mtr.light_rail_route_announcement_cjk", "gui.mtr.light_rail_route_announcement", thisRoute.lightRailRouteNumber.replace("", " "), 1, lastStation.name), true);
 					}
 				});
 			}
-		}, (platformId, arrivalMillis, departureMillis, trainType, trainLength, stopIndex, routeIds) -> useRoutesAndStationsFromIndex(stopIndex, routeIds, (thisRoute, nextRoute, thisStation, nextStation, lastStation) -> {
-			if (lastStation != null) {
-				if (!ClientData.schedulesForPlatform.containsKey(platformId)) {
-					ClientData.schedulesForPlatform.put(platformId, new HashSet<>());
-				}
-
-				final String destinationString;
-				if (thisRoute != null && thisRoute.isLightRailRoute) {
-					final String lightRailRouteNumber = thisRoute.lightRailRouteNumber;
-					final String[] lastStationSplit = lastStation.name.split("\\|");
-					final StringBuilder destination = new StringBuilder();
-					for (final String lastStationSplitPart : lastStationSplit) {
-						destination.append("|").append(lightRailRouteNumber.isEmpty() ? "" : lightRailRouteNumber + " ").append(lastStationSplitPart);
-					}
-					destinationString = destination.length() > 0 ? destination.substring(1) : "";
-				} else {
-					destinationString = lastStation.name;
-				}
-
-				ClientData.schedulesForPlatform.get(platformId).add(new Route.ScheduleEntry(arrivalMillis, departureMillis, trainType, trainLength, platformId, destinationString, nextStation == null));
-			}
-		})));
+		}));
 
 		matrices.translate(-cameraPos.x, 0.0625 + SMALL_OFFSET - cameraPos.y, -cameraPos.z);
 		final boolean renderColors = player.isHolding(item -> item instanceof ItemRailModifier);
 		final int maxRailDistance = renderDistanceChunks * 16;
-		ClientData.rails.forEach((startPos, railMap) -> railMap.forEach((endPos, rail) -> {
+		ClientData.RAILS.forEach((startPos, railMap) -> railMap.forEach((endPos, rail) -> {
 			if (!RailwayData.isBetween(player.getX(), startPos.getX(), endPos.getX(), maxRailDistance) || !RailwayData.isBetween(player.getZ(), startPos.getZ(), endPos.getZ(), maxRailDistance)) {
 				return;
 			}
 
 			rail.render((x1, z1, x2, z2, x3, z3, x4, z4, y1, y2) -> {
-				if (shouldNotRender(player, new BlockPos(x1, y1, z1), maxRailDistance)) {
+				if (shouldNotRender(new BlockPos(x1, y1, z1), maxRailDistance, null)) {
 					return;
 				}
 
@@ -262,60 +250,63 @@ public class RenderTrains implements IGui {
 				if (rail.railType == RailType.NONE) {
 					if (renderColors) {
 						final VertexConsumer vertexConsumerArrow = vertexConsumers.getBuffer(MoreRenderLayers.getExterior(new Identifier("mtr:textures/block/one_way_rail_arrow.png")));
-						IDrawing.drawTexture(matrices, vertexConsumerArrow, x1, y1, z1, x2, y1 + SMALL_OFFSET, z2, x3, y2, z3, x4, y2 + SMALL_OFFSET, z4, 0, 0.25F, 1, 0.75F, Direction.UP, -1, light2);
-						IDrawing.drawTexture(matrices, vertexConsumerArrow, x2, y1 + SMALL_OFFSET, z2, x1, y1, z1, x4, y2 + SMALL_OFFSET, z4, x3, y2, z3, 0, 0.25F, 1, 0.75F, Direction.UP, -1, light2);
+						IDrawing.drawTexture(matrices, vertexConsumerArrow, (float) x1, (float) y1, (float) z1, (float) x2, (float) y1 + SMALL_OFFSET, (float) z2, (float) x3, (float) y2, (float) z3, (float) x4, (float) y2 + SMALL_OFFSET, (float) z4, 0, 0.25F, 1, 0.75F, Direction.UP, -1, light2);
+						IDrawing.drawTexture(matrices, vertexConsumerArrow, (float) x2, (float) y1 + SMALL_OFFSET, (float) z2, (float) x1, (float) y1, (float) z1, (float) x4, (float) y2 + SMALL_OFFSET, (float) z4, (float) x3, (float) y2, (float) z3, 0, 0.25F, 1, 0.75F, Direction.UP, -1, light2);
 					}
 				} else {
 					final float textureOffset = (((int) (x1 + z1)) % 4) * 0.25F;
 					final int color = renderColors || rail.railType.hasSavedRail ? rail.railType.color : -1;
 
 					final VertexConsumer vertexConsumer = vertexConsumers.getBuffer(MoreRenderLayers.getExterior(new Identifier("textures/block/rail.png")));
-					IDrawing.drawTexture(matrices, vertexConsumer, x1, y1, z1, x2, y1 + SMALL_OFFSET, z2, x3, y2, z3, x4, y2 + SMALL_OFFSET, z4, 0, 0.1875F + textureOffset, 1, 0.3125F + textureOffset, Direction.UP, color, light2);
-					IDrawing.drawTexture(matrices, vertexConsumer, x4, y2 + SMALL_OFFSET, z4, x3, y2, z3, x2, y1 + SMALL_OFFSET, z2, x1, y1, z1, 0, 0.1875F + textureOffset, 1, 0.3125F + textureOffset, Direction.UP, color, light2);
+					IDrawing.drawTexture(matrices, vertexConsumer, (float) x1, (float) y1, (float) z1, (float) x2, (float) y1 + SMALL_OFFSET, (float) z2, (float) x3, (float) y2, (float) z3, (float) x4, (float) y2 + SMALL_OFFSET, (float) z4, 0, 0.1875F + textureOffset, 1, 0.3125F + textureOffset, Direction.UP, color, light2);
+					IDrawing.drawTexture(matrices, vertexConsumer, (float) x4, (float) y2 + SMALL_OFFSET, (float) z4, (float) x3, (float) y2, (float) z3, (float) x2, (float) y1 + SMALL_OFFSET, (float) z2, (float) x1, (float) y1, (float) z1, 0, 0.1875F + textureOffset, 1, 0.3125F + textureOffset, Direction.UP, color, light2);
 				}
 			});
 		}));
-	}
 
-	public static boolean shouldNotRender(PlayerEntity player, BlockPos pos, int maxDistance) {
-		return player == null || player.getBlockPos().getManhattanDistance(pos) > (isReplayMod(player) ? MAX_RADIUS_REPLAY_MOD : maxDistance);
-	}
-
-	public static boolean shouldNotRender(BlockPos pos, int maxDistance) {
-		final PlayerEntity player = MinecraftClient.getInstance().player;
-		return shouldNotRender(player, pos, maxDistance);
-	}
-
-	public static boolean useRoutesAndStationsFromIndex(int stopIndex, List<Long> routeIds, RouteAndStationsCallback routeAndStationsCallback) {
-		if (stopIndex < 0) {
-			return false;
+		if (prevPlatformCount != ClientData.PLATFORMS.size() || prevSidingCount != ClientData.SIDINGS.size()) {
+			ClientData.DATA_CACHE.sync();
 		}
+		prevPlatformCount = ClientData.PLATFORMS.size();
+		prevSidingCount = ClientData.SIDINGS.size();
+		ClientData.DATA_CACHE.clearDataIfNeeded();
+	}
 
-		int sum = 0;
-		for (int i = 0; i < routeIds.size(); i++) {
-			final Route thisRoute = ClientData.routeIdMap.get(routeIds.get(i));
-			final Route nextRoute = i < routeIds.size() - 1 ? ClientData.routeIdMap.get(routeIds.get(i + 1)) : null;
-			if (thisRoute != null) {
-				final int difference = stopIndex - sum;
-				sum += thisRoute.platformIds.size();
-				if (!thisRoute.platformIds.isEmpty() && nextRoute != null && !nextRoute.platformIds.isEmpty() && thisRoute.platformIds.get(thisRoute.platformIds.size() - 1).equals(nextRoute.platformIds.get(0))) {
-					sum--;
-				}
-				if (stopIndex < sum) {
-					final Station thisStation = ClientData.platformIdToStation.get(thisRoute.platformIds.get(difference));
-					final Station nextStation = difference < thisRoute.platformIds.size() - 1 ? ClientData.platformIdToStation.get(thisRoute.platformIds.get(difference + 1)) : null;
-					final Station lastStation = thisRoute.platformIds.isEmpty() ? null : ClientData.platformIdToStation.get(thisRoute.platformIds.get(thisRoute.platformIds.size() - 1));
-					routeAndStationsCallback.routeAndStationsCallback(thisRoute, nextRoute, thisStation, nextStation, lastStation);
-					return true;
-				}
+	public static float getGameTicks() {
+		return gameTick;
+	}
+
+	public static boolean canPlaySound() {
+		if (gameTick - lastPlayedTrainSoundsTick >= TICKS_PER_SPEED_SOUND) {
+			lastPlayedTrainSoundsTick = gameTick;
+		}
+		return gameTick == lastPlayedTrainSoundsTick;
+	}
+
+	public static boolean shouldNotRender(BlockPos pos, int maxDistance, Direction facing) {
+		final Entity camera = MinecraftClient.getInstance().cameraEntity;
+		return shouldNotRender(camera, pos, maxDistance, facing);
+	}
+
+	private static boolean shouldNotRender(Entity camera, BlockPos pos, int maxDistance, Direction facing) {
+		final boolean playerFacingAway;
+		if (facing == null) {
+			playerFacingAway = false;
+		} else {
+			if (facing.getAxis() == Direction.Axis.X) {
+				final double playerXOffset = camera.getX() - pos.getX() - 0.5;
+				playerFacingAway = Math.signum(playerXOffset) == facing.getOffsetX() && Math.abs(playerXOffset) >= 0.5;
+			} else {
+				final double playerZOffset = camera.getZ() - pos.getZ() - 0.5;
+				playerFacingAway = Math.signum(playerZOffset) == facing.getOffsetZ() && Math.abs(playerZOffset) >= 0.5;
 			}
 		}
-		return false;
+		return camera == null || playerFacingAway || camera.getBlockPos().getManhattanDistance(pos) > (MTRClient.isReplayMod ? MAX_RADIUS_REPLAY_MOD : maxDistance);
 	}
 
-	private static void renderWithLight(World world, float x, float y, float z, Vec3d cameraPos, PlayerEntity player, boolean offsetRender, RenderCallback renderCallback) {
+	private static void renderWithLight(World world, double x, double y, double z, Vec3d cameraPos, boolean offsetRender, RenderCallback renderCallback) {
 		final BlockPos posAverage = offsetRender ? new BlockPos(cameraPos).add(x, y, z) : new BlockPos(x, y, z);
-		if (!shouldNotRender(player, posAverage, MinecraftClient.getInstance().options.viewDistance * 8)) {
+		if (!shouldNotRender(posAverage, MinecraftClient.getInstance().options.viewDistance * 8, null)) {
 			renderCallback.renderCallback(LightmapTextureManager.pack(world.getLightLevel(LightType.BLOCK, posAverage), world.getLightLevel(LightType.SKY, posAverage)), posAverage);
 		}
 	}
@@ -328,28 +319,8 @@ public class RenderTrains implements IGui {
 		}
 	}
 
-	private static void drawTexture(MatrixStack matrices, VertexConsumer vertexConsumer, Pos3f pos1, Pos3f pos2, Pos3f pos3, Pos3f pos4, int light) {
-		IDrawing.drawTexture(matrices, vertexConsumer, pos1.x, pos1.y, pos1.z, pos2.x, pos2.y, pos2.z, pos3.x, pos3.y, pos3.z, pos4.x, pos4.y, pos4.z, 0, 0, 1, 1, Direction.UP, -1, light);
-	}
-
-	private static boolean isReplayMod(PlayerEntity player) {
-		if (player == null) {
-			return false;
-		} else {
-			return player.getClass().toGenericString().toLowerCase().contains("replaymod");
-		}
-	}
-
-	private static Identifier getTrainTexture(String customId, String trainId) {
-		if (customId.isEmpty() || !CustomResources.customTrains.containsKey(customId)) {
-			return new Identifier("mtr:textures/entity/" + trainId + ".png");
-		} else {
-			return CustomResources.customTrains.get(customId).textureId;
-		}
-	}
-
-	private static String getConnectorTextureString(String trainId, String connectorPart) {
-		return "mtr:textures/entity/" + trainId + "_connector_" + connectorPart + ".png";
+	private static void drawTexture(MatrixStack matrices, VertexConsumer vertexConsumer, Vec3d pos1, Vec3d pos2, Vec3d pos3, Vec3d pos4, int light) {
+		IDrawing.drawTexture(matrices, vertexConsumer, (float) pos1.x, (float) pos1.y, (float) pos1.z, (float) pos2.x, (float) pos2.y, (float) pos2.z, (float) pos3.x, (float) pos3.y, (float) pos3.z, (float) pos4.x, (float) pos4.y, (float) pos4.z, 0, 0, 1, 1, Direction.UP, -1, light);
 	}
 
 	private static ModelTrainBase getModel(TrainType trainType) {

@@ -2,8 +2,8 @@ package mtr.model;
 
 public class ModelKTrainMini extends ModelKTrain {
 
-	public ModelKTrainMini(boolean isTCL) {
-		super(isTCL);
+	public ModelKTrainMini(boolean isTcl) {
+		super(isTcl);
 	}
 
 	@Override

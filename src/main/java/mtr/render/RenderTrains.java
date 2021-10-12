@@ -53,8 +53,10 @@ public class RenderTrains implements IGui {
 	private static final ModelMLRMini MODEL_MLR_MINI = new ModelMLRMini();
 	private static final ModelMTrain MODEL_M_TRAIN = new ModelMTrain();
 	private static final ModelMTrainMini MODEL_M_TRAIN_MINI = new ModelMTrainMini();
-	private static final ModelKTrain MODEL_K_TRAIN = new ModelKTrain();
-	private static final ModelKTrainMini MODEL_K_TRAIN_MINI = new ModelKTrainMini();
+	private static final ModelKTrain MODEL_K_TRAIN = new ModelKTrain(false);
+	private static final ModelKTrainMini MODEL_K_TRAIN_MINI = new ModelKTrainMini(false);
+	private static final ModelKTrain MODEL_K_TRAIN_TCL = new ModelKTrain(true);
+	private static final ModelKTrainMini MODEL_K_TRAIN_TCL_MINI = new ModelKTrainMini(true);
 	private static final ModelATrain MODEL_A_TRAIN_TCL = new ModelATrain(false);
 	private static final ModelATrainMini MODEL_A_TRAIN_TCL_MINI = new ModelATrainMini(false);
 	private static final ModelATrain MODEL_A_TRAIN_AEL = new ModelATrain(true);
@@ -65,6 +67,7 @@ public class RenderTrains implements IGui {
 	private static final ModelLightRail MODEL_LIGHT_RAIL_3 = new ModelLightRail(3);
 	private static final ModelLightRail MODEL_LIGHT_RAIL_4 = new ModelLightRail(4);
 	private static final ModelLightRail MODEL_LIGHT_RAIL_5 = new ModelLightRail(5);
+	private static final ModelCRH380A MODEL_VIBRANT_EXPRESS = new ModelCRH380A();
 
 	public static void render(World world, MatrixStack matrices, VertexConsumerProvider vertexConsumers, Vec3d cameraPos) {
 		final MinecraftClient client = MinecraftClient.getInstance();
@@ -371,6 +374,10 @@ public class RenderTrains implements IGui {
 				return MODEL_K_TRAIN;
 			case K_TRAIN_MINI:
 				return MODEL_K_TRAIN_MINI;
+			case K_TRAIN_TCL:
+				return MODEL_K_TRAIN_TCL;
+			case K_TRAIN_TCL_MINI:
+				return MODEL_K_TRAIN_TCL_MINI;
 			case A_TRAIN_TCL:
 				return MODEL_A_TRAIN_TCL;
 			case A_TRAIN_TCL_MINI:
@@ -391,6 +398,8 @@ public class RenderTrains implements IGui {
 				return MODEL_LIGHT_RAIL_4;
 			case LIGHT_RAIL_5:
 				return MODEL_LIGHT_RAIL_5;
+			case CRH380A_VIBRANT_EXPRESS:
+				return MODEL_VIBRANT_EXPRESS;
 			default:
 				return null;
 		}

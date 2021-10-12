@@ -33,6 +33,8 @@ public class MTRClient implements ClientModInitializer, IPacket {
 	@Override
 	public void onInitializeClient() {
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.APG_DOOR, RenderLayer.getCutout());
+		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.APG_DOOR_HSR_LEFT, RenderLayer.getCutout());
+		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.APG_DOOR_HSR_RIGHT, RenderLayer.getCutout());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.APG_GLASS, RenderLayer.getCutout());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.APG_GLASS_END, RenderLayer.getCutout());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.CLOCK, RenderLayer.getCutout());
@@ -48,6 +50,8 @@ public class MTRClient implements ClientModInitializer, IPacket {
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.GLASS_FENCE_WKS, RenderLayer.getTranslucent());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.LOGO, RenderLayer.getCutout());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.PLATFORM, RenderLayer.getCutout());
+		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.PLATFORM_NA_1, RenderLayer.getCutout());
+		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.PLATFORM_NA_2, RenderLayer.getCutout());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.PSD_DOOR_1, RenderLayer.getCutout());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.PSD_GLASS_1, RenderLayer.getCutout());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.PSD_GLASS_END_1, RenderLayer.getCutout());
@@ -55,6 +59,7 @@ public class MTRClient implements ClientModInitializer, IPacket {
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.PSD_GLASS_2, RenderLayer.getCutout());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.PSD_GLASS_END_2, RenderLayer.getCutout());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.RAIL, RenderLayer.getCutout());
+		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.RUBBISH_BIN_1, RenderLayer.getCutout());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.STATION_COLOR_STAINED_GLASS, RenderLayer.getTranslucent());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.STATION_NAME_TALL_BLOCK, RenderLayer.getCutout());
 		BlockRenderLayerMap.INSTANCE.putBlock(Blocks.STATION_NAME_TALL_WALL, RenderLayer.getCutout());

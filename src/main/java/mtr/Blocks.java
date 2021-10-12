@@ -10,6 +10,8 @@ import net.minecraft.block.Material;
 public interface Blocks {
 
 	Block APG_DOOR = new BlockAPGDoor();
+	Block APG_DOOR_HSR_RIGHT = new BlockAPGDoorHSR(false);
+	Block APG_DOOR_HSR_LEFT = new BlockAPGDoorHSR(true);
 	Block APG_GLASS = new BlockAPGGlass();
 	Block APG_GLASS_END = new BlockAPGGlassEnd();
 	Block ARRIVAL_PROJECTOR_1_SMALL = new BlockArrivalProjector1Small();
@@ -34,6 +36,8 @@ public interface Blocks {
 	Block PIDS_2 = new BlockPIDS2();
 	Block PIDS_3 = new BlockPIDS3();
 	Block PLATFORM = new BlockPlatform(FabricBlockSettings.of(Material.METAL, MapColor.YELLOW).requiresTool().hardness(2));
+	Block PLATFORM_NA_1 = new BlockPlatform(FabricBlockSettings.of(Material.METAL, MapColor.YELLOW).requiresTool().hardness(2));
+	Block PLATFORM_NA_2 = new BlockPlatform(FabricBlockSettings.of(Material.METAL, MapColor.YELLOW).requiresTool().hardness(2));
 	Block PSD_DOOR_1 = new BlockPSDDoor(0);
 	Block PSD_GLASS_1 = new BlockPSDGlass(0);
 	Block PSD_GLASS_END_1 = new BlockPSDGlassEnd(0);
@@ -59,6 +63,7 @@ public interface Blocks {
 	Block ROUTE_SIGN_STANDING_METAL = new BlockRouteSignStandingMetal();
 	Block ROUTE_SIGN_WALL_LIGHT = new BlockRouteSignWallLight();
 	Block ROUTE_SIGN_WALL_METAL = new BlockRouteSignWallMetal();
+	Block RUBBISH_BIN_1 = new BlockRubbishBin(FabricBlockSettings.of(Material.METAL, MapColor.IRON_GRAY).hardness(4));
 	Block STATION_COLOR_ANDESITE = new BlockStationColor(AbstractBlock.Settings.copy(net.minecraft.block.Blocks.ANDESITE));
 	Block STATION_COLOR_BEDROCK = new BlockStationColor(AbstractBlock.Settings.copy(net.minecraft.block.Blocks.STONE));
 	Block STATION_COLOR_BIRCH_WOOD = new BlockStationColor(AbstractBlock.Settings.copy(net.minecraft.block.Blocks.BIRCH_WOOD));
